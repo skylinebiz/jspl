@@ -1,6 +1,11 @@
 ### JSPL
 
-JSPL
+Custom Frappe/ERPNext app for JSPL, currently featuring **Blanket Booking Order**: an item-group-level companion to ERPNext's Blanket Order that commits quantities against an Item Group (instead of a specific Item Code) for a customer or supplier, and tracks consumption automatically as linked Purchase Orders are submitted or cancelled.
+
+### Release Notes
+
+- [release.md](release.md) — the latest release announcement.
+- [CHANGELOG.md](CHANGELOG.md) — full version history: what was added, changed, updated, and removed in each release.
 
 ### Installation
 
