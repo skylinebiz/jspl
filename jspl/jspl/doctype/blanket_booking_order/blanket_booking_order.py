@@ -9,6 +9,7 @@ from frappe.utils import flt, getdate
 
 from erpnext import get_company_currency
 from erpnext.controllers.accounts_controller import validate_conversion_rate
+from erpnext.controllers.queries import item_query
 from erpnext.setup.utils import get_exchange_rate
 
 
@@ -199,3 +200,27 @@ def update_bbo_ordered_qty(doc, method=None):
 	bbo_names = {d.custom_blanket_booking_order for d in doc.items if d.custom_blanket_booking_order}
 	for bbo_name in bbo_names:
 		frappe.get_doc("Blanket Booking Order", bbo_name).update_ordered_qty()
+
+
+@frappe.whitelist()
+def bbo_item_query(doctype, txt, searchfield, start, page_len, filters):
+	"""Item link query for Purchase Order Item's `item_code`. Same as ERPNext's
+	own `item_query`, except when the row's `custom_blanket_booking_order` is
+	passed in `filters`, results are further restricted to Items whose Item
+	Group is one of that Blanket Booking Order's Item Groups."""
+	if isinstance(filters, str):
+		filters = frappe.parse_json(filters)
+	filters = dict(filters or {})
+
+	bbo_name = filters.pop("blanket_booking_order", None)
+	if bbo_name:
+		item_groups = list(
+			set(
+				frappe.get_all(
+					"Blanket Booking Order Item", filters={"parent": bbo_name}, pluck="item_group"
+				)
+			)
+		)
+		filters["item_group"] = ["in", item_groups or [""]]
+
+	return item_query(doctype, txt, searchfield, start, page_len, filters)
