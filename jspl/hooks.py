@@ -8,7 +8,21 @@ app_license = "mit"
 # Apps
 # ------------------
 
-# required_apps = []
+required_apps = ["erpnext"]
+
+# Fixtures
+# ------------------
+# Records synced into every site on `bench migrate`, and re-exported here on
+# `bench export-fixtures`.
+
+fixtures = [
+	{
+		"doctype": "Custom Field",
+		"filters": [
+            ["module", "in", ["JSPL"]]
+        ]
+	}
+]
 
 # Each item in the list will be shown as an app in the apps page
 # add_to_apps_screen = [
@@ -43,7 +57,7 @@ app_license = "mit"
 # page_js = {"page" : "public/js/file.js"}
 
 # include js in doctype views
-# doctype_js = {"doctype" : "public/js/doctype.js"}
+doctype_js = {"Purchase Order": "public/js/purchase_order.js"}
 # doctype_list_js = {"doctype" : "public/js/doctype_list.js"}
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
 # doctype_calendar_js = {"doctype" : "public/js/doctype_calendar.js"}
@@ -144,13 +158,13 @@ app_license = "mit"
 # ---------------
 # Hook on document methods and events
 
-# doc_events = {
-# 	"*": {
-# 		"on_update": "method",
-# 		"on_cancel": "method",
-# 		"on_trash": "method"
-# 	}
-# }
+doc_events = {
+	"Purchase Order": {
+		"before_submit": "jspl.jspl.doctype.blanket_booking_order.blanket_booking_order.validate_purchase_order",
+		"on_submit": "jspl.jspl.doctype.blanket_booking_order.blanket_booking_order.update_bbo_ordered_qty",
+		"on_cancel": "jspl.jspl.doctype.blanket_booking_order.blanket_booking_order.update_bbo_ordered_qty",
+	}
+}
 
 # Scheduled Tasks
 # ---------------
