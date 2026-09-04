@@ -13,6 +13,7 @@ class BlanketBookingOrderItem(Document):
 	if TYPE_CHECKING:
 		from frappe.types import DF
 
+		allow_overvaluation: DF.Check
 		base_rate: DF.Currency
 		item_group: DF.Link
 		ordered_qty: DF.Float

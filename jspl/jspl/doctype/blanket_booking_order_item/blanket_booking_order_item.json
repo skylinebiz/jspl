@@ -11,6 +11,7 @@
   "rate",
   "base_rate",
   "ordered_qty",
+  "allow_overvaluation",
   "section_break_7",
   "terms_and_conditions"
  ],
@@ -58,6 +59,13 @@
    "label": "Ordered Quantity",
    "no_copy": 1,
    "read_only": 1
+  },
+  {
+   "default": "0",
+   "description": "If checked, the Purchase/Sales Order quantity allowance check is skipped for this Item Group - it can be ordered for more than the Quantity committed here.",
+   "fieldname": "allow_overvaluation",
+   "fieldtype": "Check",
+   "label": "Allow Overvaluation Purchase/Sales"
   },
   {
    "fieldname": "section_break_7",
