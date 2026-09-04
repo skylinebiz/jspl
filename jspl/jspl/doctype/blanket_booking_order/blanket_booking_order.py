@@ -162,11 +162,12 @@ _ORDER_TYPE_CONFIG = {
 
 def apply_bbo_rate(doc, method=None):
 	"""`before_validate` hook: for every item linked to a Blanket Booking
-	Order, confirm its Item Group is actually listed on that BBO and override
-	its rate with the BBO row's rate (converted from the BBO's company
-	currency into this document's currency). Runs before ERPNext's own
-	`validate()` calculates taxes and totals, so the override is reflected in
-	the saved totals."""
+	Order, confirm its Item Group is actually listed on that BBO. If that BBO
+	row has a Rate set, override the item's rate with it (converted from the
+	BBO's company currency into this document's currency); if the BBO row's
+	Rate is blank, the order's own rate is left untouched. Runs before
+	ERPNext's own `validate()` calculates taxes and totals, so any override is
+	reflected in the saved totals."""
 	if doc.doctype not in _ORDER_TYPE_CONFIG:
 		return
 
@@ -188,7 +189,8 @@ def apply_bbo_rate(doc, method=None):
 				)
 			)
 
-		item.rate = flt(bbo_row.base_rate / (flt(doc.conversion_rate) or 1), item.precision("rate"))
+		if bbo_row.rate:
+			item.rate = flt(bbo_row.base_rate / (flt(doc.conversion_rate) or 1), item.precision("rate"))
 
 
 def validate_order_against_bbo(doc, method=None):

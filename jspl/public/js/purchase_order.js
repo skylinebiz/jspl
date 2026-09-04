@@ -86,37 +86,71 @@ frappe.ui.form.on("Purchase Order Item", {
 // soon as both are known, purely for immediate feedback - the authoritative
 // override happens server-side (see `apply_bbo_rate`) on every save, so the
 // rate can never drift from what was committed on the BBO.
+//
+// Item Group isn't read from the row directly: it's a fetch_from field that
+// ERPNext's own item_code handler populates asynchronously, so reading it
+// immediately here can still hold the *previous* item's Item Group and
+// wrongly report a mismatch against the just-picked item. Resolving it
+// ourselves from Item avoids that race, and the staleness check afterwards
+// bails out if the row changed again while either lookup was in flight.
 function sync_row_with_bbo(cdt, cdn) {
 	const row = locals[cdt][cdn];
 	const bbo_name = row.custom_blanket_booking_order;
-	const item_group = row.item_group;
-	if (!bbo_name || !item_group) {
+	const item_code = row.item_code;
+	if (!bbo_name || !item_code) {
 		return;
 	}
 
-	frappe.db
-		.get_value(
-			"Blanket Booking Order Item",
-			{ parent: bbo_name, item_group: item_group },
-			"rate",
-			null,
-			"Blanket Booking Order"
-		)
-		.then((r) => {
-			if (r.exc) {
-				// A real error (e.g. permissions) - don't clear the row over it.
-				return;
-			}
-			if (!r.message || r.message.rate === undefined) {
-				frappe.model.set_value(cdt, cdn, "custom_blanket_booking_order", "");
-				frappe.msgprint(
-					__("Item Group {0} is not listed in {1} - please choose a matching Blanket Booking Order.", [
-						frappe.utils.escape_html(item_group),
-						frappe.utils.escape_html(bbo_name),
-					])
-				);
-				return;
-			}
-			frappe.model.set_value(cdt, cdn, "rate", r.message.rate);
-		});
+	frappe.db.get_value("Item", item_code, "item_group").then((item_r) => {
+		const item_group = item_r.message && item_r.message.item_group;
+		const current_row = locals[cdt][cdn];
+		if (
+			!item_group ||
+			!current_row ||
+			current_row.custom_blanket_booking_order !== bbo_name ||
+			current_row.item_code !== item_code
+		) {
+			return;
+		}
+
+		frappe.db
+			.get_value(
+				"Blanket Booking Order Item",
+				{ parent: bbo_name, item_group: item_group },
+				"rate",
+				null,
+				"Blanket Booking Order"
+			)
+			.then((r) => {
+				if (r.exc) {
+					// A real error (e.g. permissions) - don't clear the row over it.
+					return;
+				}
+
+				const still_current = locals[cdt][cdn];
+				if (
+					!still_current ||
+					still_current.custom_blanket_booking_order !== bbo_name ||
+					still_current.item_code !== item_code
+				) {
+					return;
+				}
+
+				if (!r.message || r.message.rate === undefined) {
+					frappe.model.set_value(cdt, cdn, "custom_blanket_booking_order", "");
+					frappe.msgprint(
+						__("Item Group {0} is not listed in {1} - please choose a matching Blanket Booking Order.", [
+							frappe.utils.escape_html(item_group),
+							frappe.utils.escape_html(bbo_name),
+						])
+					);
+					return;
+				}
+
+				// The BBO row's Rate is optional - only prefill when it's actually set.
+				if (r.message.rate) {
+					frappe.model.set_value(cdt, cdn, "rate", r.message.rate);
+				}
+			});
+	});
 }
