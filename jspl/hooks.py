@@ -57,7 +57,10 @@ fixtures = [
 # page_js = {"page" : "public/js/file.js"}
 
 # include js in doctype views
-doctype_js = {"Purchase Order": "public/js/purchase_order.js"}
+doctype_js = {
+	"Purchase Order": "public/js/purchase_order.js",
+	"Sales Order": "public/js/sales_order.js",
+}
 # doctype_list_js = {"doctype" : "public/js/doctype_list.js"}
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
 # doctype_calendar_js = {"doctype" : "public/js/doctype_calendar.js"}
@@ -105,7 +108,7 @@ doctype_js = {"Purchase Order": "public/js/purchase_order.js"}
 # Uninstallation
 # ------------
 
-# before_uninstall = "jspl.uninstall.before_uninstall"
+before_uninstall = "jspl.uninstall.before_uninstall"
 # after_uninstall = "jspl.uninstall.after_uninstall"
 
 # Integration Setup
@@ -160,10 +163,17 @@ doctype_js = {"Purchase Order": "public/js/purchase_order.js"}
 
 doc_events = {
 	"Purchase Order": {
-		"before_submit": "jspl.jspl.doctype.blanket_booking_order.blanket_booking_order.validate_purchase_order",
+		"before_validate": "jspl.jspl.doctype.blanket_booking_order.blanket_booking_order.apply_bbo_rate",
+		"before_submit": "jspl.jspl.doctype.blanket_booking_order.blanket_booking_order.validate_order_against_bbo",
 		"on_submit": "jspl.jspl.doctype.blanket_booking_order.blanket_booking_order.update_bbo_ordered_qty",
 		"on_cancel": "jspl.jspl.doctype.blanket_booking_order.blanket_booking_order.update_bbo_ordered_qty",
-	}
+	},
+	"Sales Order": {
+		"before_validate": "jspl.jspl.doctype.blanket_booking_order.blanket_booking_order.apply_bbo_rate",
+		"before_submit": "jspl.jspl.doctype.blanket_booking_order.blanket_booking_order.validate_order_against_bbo",
+		"on_submit": "jspl.jspl.doctype.blanket_booking_order.blanket_booking_order.update_bbo_ordered_qty",
+		"on_cancel": "jspl.jspl.doctype.blanket_booking_order.blanket_booking_order.update_bbo_ordered_qty",
+	},
 }
 
 # Scheduled Tasks

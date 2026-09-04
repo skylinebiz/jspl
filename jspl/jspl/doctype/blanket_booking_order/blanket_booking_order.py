@@ -111,30 +111,30 @@ class BlanketBookingOrder(Document):
 			item.base_rate = flt(rate * flt(self.conversion_rate), item.precision("base_rate"))
 
 	def update_ordered_qty(self):
-		"""Recompute each row's Ordered Quantity from submitted Purchase Orders
-		whose items are linked to this Blanket Booking Order (via the
-		`custom_blanket_booking_order` field on Purchase Order Item), aggregated
-		by Item Group. Called from the Purchase Order `on_submit`/`on_cancel`
-		hooks below, so a cancelled Purchase Order's quantity is dropped
-		automatically (it's no longer docstatus 1)."""
-		if self.order_type != "Purchasing":
+		"""Recompute each row's Ordered Quantity from submitted Purchase/Sales
+		Orders whose items are linked to this Blanket Booking Order (via the
+		`custom_blanket_booking_order` field), aggregated by Item Group.
+		Called from the `on_submit`/`on_cancel` hooks below, so a cancelled
+		order's quantity is dropped automatically (it's no longer docstatus 1)."""
+		ref_doctype = {"Purchasing": "Purchase Order", "Selling": "Sales Order"}.get(self.order_type)
+		if not ref_doctype:
 			return
 
-		po = frappe.qb.DocType("Purchase Order")
-		po_item = frappe.qb.DocType("Purchase Order Item")
+		ref = frappe.qb.DocType(ref_doctype)
+		ref_item = frappe.qb.DocType(f"{ref_doctype} Item")
 
 		item_group_qty = frappe._dict(
 			(
-				frappe.qb.from_(po_item)
-				.join(po)
-				.on(po.name == po_item.parent)
-				.select(po_item.item_group, Sum(po_item.stock_qty).as_("qty"))
+				frappe.qb.from_(ref_item)
+				.join(ref)
+				.on(ref.name == ref_item.parent)
+				.select(ref_item.item_group, Sum(ref_item.stock_qty).as_("qty"))
 				.where(
-					(po_item.custom_blanket_booking_order == self.name)
-					& (po.docstatus == 1)
-					& (po.status != "Closed")
+					(ref_item.custom_blanket_booking_order == self.name)
+					& (ref.docstatus == 1)
+					& (ref.status != "Closed")
 				)
-				.groupby(po_item.item_group)
+				.groupby(ref_item.item_group)
 			).run()
 		)
 
@@ -142,28 +142,95 @@ class BlanketBookingOrder(Document):
 			d.db_set("ordered_qty", item_group_qty.get(d.item_group, 0))
 
 
-def validate_purchase_order(doc, method=None):
-	"""Purchase Order `before_submit` hook: every Blanket Booking Order picked
-	on this order's items must be a submitted, Purchasing BBO for the same
-	supplier, must actually list the item's Item Group, and the quantity
-	being booked against that Item Group (across this order) must not exceed
-	the BBO row's remaining quantity (plus the Buying Settings allowance)."""
+# Purchase Order / Sales Order integration
+# -----------------------------------------
+# Wired up in hooks.py against both doctypes.
+
+_ORDER_TYPE_CONFIG = {
+	"Purchase Order": {
+		"order_type": "Purchasing",
+		"party_field": "supplier",
+		"allowance_settings_doctype": "Buying Settings",
+	},
+	"Sales Order": {
+		"order_type": "Selling",
+		"party_field": "customer",
+		"allowance_settings_doctype": "Selling Settings",
+	},
+}
+
+
+def apply_bbo_rate(doc, method=None):
+	"""`before_validate` hook: for every item linked to a Blanket Booking
+	Order, confirm its Item Group is actually listed on that BBO and override
+	its rate with the BBO row's rate (converted from the BBO's company
+	currency into this document's currency). Runs before ERPNext's own
+	`validate()` calculates taxes and totals, so the override is reflected in
+	the saved totals."""
+	if doc.doctype not in _ORDER_TYPE_CONFIG:
+		return
+
+	bbo_cache = {}
+	for item in doc.items:
+		if not item.custom_blanket_booking_order:
+			continue
+
+		bbo = bbo_cache.get(item.custom_blanket_booking_order)
+		if bbo is None:
+			bbo = frappe.get_cached_doc("Blanket Booking Order", item.custom_blanket_booking_order)
+			bbo_cache[item.custom_blanket_booking_order] = bbo
+
+		bbo_row = next((d for d in bbo.items if d.item_group == item.item_group), None)
+		if not bbo_row:
+			frappe.throw(
+				_("Row {0}: Item Group {1} is not listed in {2}").format(
+					item.idx, frappe.bold(item.item_group), frappe.bold(bbo.name)
+				)
+			)
+
+		item.rate = flt(bbo_row.base_rate / (flt(doc.conversion_rate) or 1), item.precision("rate"))
+
+
+def validate_order_against_bbo(doc, method=None):
+	"""`before_submit` hook: every Blanket Booking Order referenced by this
+	order's items must be submitted, of the matching Order Type, for the same
+	party, and its validity (From Date - To Date) must cover this order's
+	Transaction Date. The quantity booked per Item Group (summed across this
+	order) must not exceed the BBO row's remaining quantity plus the
+	configured allowance - unless that row has "Allow Overvaluation" checked."""
+	config = _ORDER_TYPE_CONFIG.get(doc.doctype)
+	if not config:
+		return
+
 	bbo_names = {d.custom_blanket_booking_order for d in doc.items if d.custom_blanket_booking_order}
 	if not bbo_names:
 		return
 
-	allowance = flt(frappe.db.get_single_value("Buying Settings", "blanket_order_allowance"))
+	allowance = flt(frappe.db.get_single_value(config["allowance_settings_doctype"], "blanket_order_allowance"))
+	party = doc.get(config["party_field"])
 
 	for bbo_name in bbo_names:
 		bbo = frappe.get_doc("Blanket Booking Order", bbo_name)
 		if bbo.docstatus != 1:
 			frappe.throw(_("{0} must be submitted").format(frappe.bold(bbo_name)))
-		if bbo.order_type != "Purchasing":
-			frappe.throw(_("{0} is not a Purchasing Blanket Booking Order").format(frappe.bold(bbo_name)))
-		if bbo.supplier != doc.supplier:
+		if bbo.order_type != config["order_type"]:
 			frappe.throw(
-				_("Supplier of {0} does not match the Supplier of this Purchase Order").format(
-					frappe.bold(bbo_name)
+				_("{0} is not a {1} Blanket Booking Order").format(frappe.bold(bbo_name), config["order_type"])
+			)
+		if bbo.get(config["party_field"]) != party:
+			frappe.throw(
+				_("{0} of {1} does not match the {0} of this {2}").format(
+					frappe.unscrub(config["party_field"]), frappe.bold(bbo_name), doc.doctype
+				)
+			)
+		if not (getdate(bbo.from_date) <= getdate(doc.transaction_date) <= getdate(bbo.to_date)):
+			frappe.throw(
+				_("{0} is valid from {1} to {2}, which does not cover this {3}'s Transaction Date {4}").format(
+					frappe.bold(bbo_name),
+					frappe.bold(bbo.from_date),
+					frappe.bold(bbo.to_date),
+					doc.doctype,
+					frappe.bold(doc.transaction_date),
 				)
 			)
 
@@ -172,18 +239,14 @@ def validate_purchase_order(doc, method=None):
 		for item in doc.items:
 			if item.custom_blanket_booking_order != bbo_name:
 				continue
-			if item.item_group not in bbo_rows:
-				frappe.throw(
-					_("Row {0}: Item Group {1} is not listed in {2}").format(
-						item.idx, frappe.bold(item.item_group), frappe.bold(bbo_name)
-					)
-				)
 			item_group_qty[item.item_group] = item_group_qty.get(item.item_group, 0) + flt(
 				item.stock_qty or item.qty
 			)
 
 		for item_group, qty in item_group_qty.items():
 			bbo_row = bbo_rows[item_group]
+			if bbo_row.allow_overvaluation:
+				continue
 			remaining_qty = flt(bbo_row.qty) - flt(bbo_row.ordered_qty)
 			allowed_qty = remaining_qty + (remaining_qty * (allowance / 100))
 			if bbo_row.qty and qty > allowed_qty:
@@ -195,8 +258,8 @@ def validate_purchase_order(doc, method=None):
 
 
 def update_bbo_ordered_qty(doc, method=None):
-	"""Purchase Order `on_submit`/`on_cancel` hook: refresh Ordered Quantity on
-	every Blanket Booking Order referenced by this order's items."""
+	"""`on_submit`/`on_cancel` hook: refresh Ordered Quantity on every Blanket
+	Booking Order referenced by this order's items."""
 	bbo_names = {d.custom_blanket_booking_order for d in doc.items if d.custom_blanket_booking_order}
 	for bbo_name in bbo_names:
 		frappe.get_doc("Blanket Booking Order", bbo_name).update_ordered_qty()
@@ -204,8 +267,8 @@ def update_bbo_ordered_qty(doc, method=None):
 
 @frappe.whitelist()
 def bbo_item_query(doctype, txt, searchfield, start, page_len, filters):
-	"""Item link query for Purchase Order Item's `item_code`. Same as ERPNext's
-	own `item_query`, except when the row's `custom_blanket_booking_order` is
+	"""Item link query for Purchase/Sales Order Item's `item_code`. Same as
+	ERPNext's own `item_query`, except when a `blanket_booking_order` is
 	passed in `filters`, results are further restricted to Items whose Item
 	Group is one of that Blanket Booking Order's Item Groups."""
 	if isinstance(filters, str):

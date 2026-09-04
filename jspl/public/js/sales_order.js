@@ -1,16 +1,16 @@
 // Copyright (c) 2026, JSPL and contributors
 // For license information, please see license.txt
 
-frappe.ui.form.on("Purchase Order", {
+frappe.ui.form.on("Sales Order", {
 	setup: function (frm) {
-		// Blanket Booking Order picked against a Purchase Order Item must be
-		// submitted, Purchasing, for the same supplier as this order, and its
+		// Blanket Booking Order picked against a Sales Order Item must be
+		// submitted, Selling, for the same customer as this order, and its
 		// validity (From Date - To Date) must cover this order's Transaction Date.
 		frm.set_query("custom_blanket_booking_order", "items", function (doc) {
 			return {
 				filters: {
-					order_type: "Purchasing",
-					supplier: doc.supplier,
+					order_type: "Selling",
+					customer: doc.customer,
 					docstatus: 1,
 					from_date: ["<=", doc.transaction_date],
 					to_date: [">=", doc.transaction_date],
@@ -20,22 +20,12 @@ frappe.ui.form.on("Purchase Order", {
 
 		// Once a row has a Blanket Booking Order, only Items whose Item Group
 		// is listed on that BBO may be picked for that row - so two rows on
-		// the same Purchase Order, against two different BBOs, each only see
+		// the same Sales Order, against two different BBOs, each only see
 		// their own BBO's Item Groups. Mirrors ERPNext's own default filters
-		// (see erpnext/public/js/controllers/buying.js) and adds to them.
+		// (see erpnext/public/js/utils/sales_common.js) and adds to them.
 		frm.set_query("item_code", "items", function (doc, cdt, cdn) {
 			const row = locals[cdt][cdn];
-			let filters;
-			if (doc.is_subcontracted) {
-				filters = { supplier: doc.supplier };
-				if (doc.is_old_subcontracting_flow) {
-					filters.is_sub_contracted_item = 1;
-				} else {
-					filters.is_stock_item = 0;
-				}
-			} else {
-				filters = { supplier: doc.supplier, is_purchase_item: 1, has_variants: 0 };
-			}
+			const filters = { is_sales_item: 1, customer: doc.customer, has_variants: 0 };
 
 			if (row.custom_blanket_booking_order) {
 				filters.blanket_booking_order = row.custom_blanket_booking_order;
@@ -48,14 +38,14 @@ frappe.ui.form.on("Purchase Order", {
 		});
 	},
 
-	supplier: function (frm) {
+	customer: function (frm) {
 		clear_bbo_from_items(frm);
 	},
 });
 
-// A row's Blanket Booking Order is only ever valid for the Supplier it was
+// A row's Blanket Booking Order is only ever valid for the Customer it was
 // filtered against (see `custom_blanket_booking_order`'s query above) - if
-// the Supplier changes, every row's selection is stale and must be cleared.
+// the Customer changes, every row's selection is stale and must be cleared.
 function clear_bbo_from_items(frm) {
 	let cleared = false;
 	(frm.doc.items || []).forEach((item) => {
@@ -66,13 +56,13 @@ function clear_bbo_from_items(frm) {
 	});
 	if (cleared) {
 		frappe.show_alert({
-			message: __("Blanket Booking Order cleared from items - Supplier changed."),
+			message: __("Blanket Booking Order cleared from items - Customer changed."),
 			indicator: "orange",
 		});
 	}
 }
 
-frappe.ui.form.on("Purchase Order Item", {
+frappe.ui.form.on("Sales Order Item", {
 	custom_blanket_booking_order: function (frm, cdt, cdn) {
 		sync_row_with_bbo(cdt, cdn);
 	},
