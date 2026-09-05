@@ -36,12 +36,12 @@
    "label": "Quantity"
   },
   {
+   "description": "Optional. If set, the Purchase/Sales Order item's rate is overridden with this rate; if left blank, the order's own rate is used as-is.",
    "fieldname": "rate",
    "fieldtype": "Currency",
    "in_list_view": 1,
    "label": "Rate",
-   "options": "currency",
-   "reqd": 1
+   "options": "currency"
   },
   {
    "fieldname": "base_rate",
@@ -49,8 +49,7 @@
    "label": "Rate (Company Currency)",
    "options": "Company:company:default_currency",
    "print_hide": 1,
-   "read_only": 1,
-   "reqd": 1
+   "read_only": 1
   },
   {
    "fieldname": "ordered_qty",
@@ -65,7 +64,8 @@
    "description": "If checked, the Purchase/Sales Order quantity can be ordered for more than the Quantity committed here.",
    "fieldname": "allow_overvaluation",
    "fieldtype": "Check",
-   "label": "Allow Overvaluation Purchase/Sales"
+   "in_list_view": 1,
+   "label": "Allow Over Purchase/Sale"
   },
   {
    "fieldname": "section_break_7",
