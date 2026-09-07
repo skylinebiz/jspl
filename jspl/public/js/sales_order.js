@@ -4,14 +4,16 @@
 frappe.ui.form.on("Sales Order", {
 	setup: function (frm) {
 		// Blanket Booking Order picked against a Sales Order Item must be
-		// submitted, Selling, for the same customer as this order, and its
-		// validity (From Date - To Date) must cover this order's Transaction Date.
+		// submitted (and not On Hold/Closed), Selling, for the same customer as
+		// this order, and its validity (From Date - To Date) must cover this
+		// order's Transaction Date.
 		frm.set_query("custom_blanket_booking_order", "items", function (doc) {
 			return {
 				filters: {
 					order_type: "Selling",
 					customer: doc.customer,
 					docstatus: 1,
+					status: ["not in", ["On Hold", "Closed"]],
 					from_date: ["<=", doc.transaction_date],
 					to_date: [">=", doc.transaction_date],
 				},

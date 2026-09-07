@@ -38,6 +38,9 @@ class BlanketBookingOrder(Document):
 		order_date: DF.Date | None
 		order_no: DF.Data | None
 		order_type: DF.Literal["", "Selling", "Purchasing"]
+		status: DF.Literal[
+			"Draft", "To Order", "Partially Ordered", "Completed", "On Hold", "Closed", "Cancelled"
+		]
 		supplier: DF.Link | None
 		supplier_name: DF.Data | None
 		tc_name: DF.Link | None
@@ -54,6 +57,14 @@ class BlanketBookingOrder(Document):
 		self.validate_duplicate_item_groups()
 		self.validate_item_qty()
 		self.set_base_rates()
+		self.set_status()
+
+	def before_cancel(self):
+		if self.status == "Closed":
+			frappe.throw(_("A Closed {0} cannot be cancelled. Re-open it first.").format(self.doctype))
+
+	def on_cancel(self):
+		self.db_set("status", "Cancelled")
 
 	def set_currency(self):
 		if self.currency:
@@ -110,6 +121,38 @@ class BlanketBookingOrder(Document):
 			item.rate = rate
 			item.base_rate = flt(rate * flt(self.conversion_rate), item.precision("base_rate"))
 
+	def set_status(self, status=None, update=False):
+		"""Compute Status. Pass `status` to force it to "On Hold" or "Closed"
+		(manual override - see `update_bbo_status` below); otherwise it's
+		computed from docstatus and Ordered Quantity, except while currently
+		"On Hold" or "Closed" - those persist automatically until explicitly
+		cleared (by `update_bbo_status` resetting `self.status` first)."""
+		previous_status = self.status
+
+		if self.docstatus == 0:
+			new_status = "Draft"
+		elif self.docstatus == 2:
+			new_status = "Cancelled"
+		elif status:
+			new_status = status
+		elif self.status in ("On Hold", "Closed"):
+			new_status = self.status
+		else:
+			new_status = self.get_qty_status()
+
+		self.status = new_status
+		if update and new_status != previous_status:
+			self.db_set("status", new_status, update_modified=False)
+
+	def get_qty_status(self):
+		total_qty = flt(sum(flt(d.qty) for d in self.items))
+		total_ordered_qty = flt(sum(flt(d.ordered_qty) for d in self.items))
+		if total_ordered_qty <= 0:
+			return "To Order"
+		if total_qty and total_ordered_qty >= total_qty:
+			return "Completed"
+		return "Partially Ordered"
+
 	def update_ordered_qty(self):
 		"""Recompute each row's Ordered Quantity from submitted Purchase/Sales
 		Orders whose items are linked to this Blanket Booking Order (via the
@@ -140,6 +183,34 @@ class BlanketBookingOrder(Document):
 
 		for d in self.items:
 			d.db_set("ordered_qty", item_group_qty.get(d.item_group, 0))
+
+		self.set_status(update=True)
+
+
+@frappe.whitelist()
+def update_bbo_status(name, status):
+	"""Manually put a submitted Blanket Booking Order "On Hold" or "Closed",
+	or "Resume"/"Re-open" one that was - which recomputes the natural,
+	quantity-driven status rather than setting a literal "Resume"/"Re-open"
+	status (there is no such status)."""
+	doc = frappe.get_doc("Blanket Booking Order", name)
+	doc.check_permission("submit")
+
+	if doc.docstatus != 1:
+		frappe.throw(_("Only a submitted {0} can have its status changed this way.").format(doc.doctype))
+
+	if status in ("On Hold", "Closed"):
+		if doc.status == "Completed":
+			frappe.throw(_("A Completed {0} cannot be put On Hold or Closed.").format(doc.doctype))
+		doc.set_status(status=status, update=True)
+		doc.add_comment("Label", _(status))
+	elif status in ("Resume", "Re-open"):
+		doc.status = None
+		doc.set_status(update=True)
+	else:
+		frappe.throw(_("Invalid status {0}").format(status))
+
+	doc.notify_update()
 
 
 # Purchase Order / Sales Order integration
@@ -215,6 +286,10 @@ def validate_order_against_bbo(doc, method=None):
 		bbo = frappe.get_doc("Blanket Booking Order", bbo_name)
 		if bbo.docstatus != 1:
 			frappe.throw(_("{0} must be submitted").format(frappe.bold(bbo_name)))
+		if bbo.status in ("On Hold", "Closed"):
+			frappe.throw(
+				_("{0} is {1} and cannot be booked against").format(frappe.bold(bbo_name), bbo.status)
+			)
 		if bbo.order_type != config["order_type"]:
 			frappe.throw(
 				_("{0} is not a {1} Blanket Booking Order").format(frappe.bold(bbo_name), config["order_type"])

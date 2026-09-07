@@ -7,6 +7,7 @@
  "engine": "InnoDB",
  "field_order": [
   "naming_series",
+  "status",
   "order_type",
   "customer",
   "customer_name",
@@ -36,6 +37,20 @@
    "label": "Series",
    "options": "JSPL-BBO-.YYYY.-",
    "reqd": 1
+  },
+  {
+   "default": "Draft",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "no_copy": 1,
+   "options": "Draft\nTo Order\nPartially Ordered\nCompleted\nOn Hold\nClosed\nCancelled",
+   "print_hide": 1,
+   "read_only": 1,
+   "reqd": 1,
+   "search_index": 1
   },
   {
    "fieldname": "order_type",
