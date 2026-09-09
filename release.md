@@ -1,5 +1,9 @@
 # Release Notes
 
+## v2.0.1 — 2026-09-09
+
+Blanket Booking Order in Purchase/Sales Order Item is now optional.
+
 ## v2.0.0 — 2026-09-07
 
 Blanket Booking Order now has a lifecycle of its own, matching Sales Order's Hold/Close workflow:

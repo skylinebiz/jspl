@@ -4,6 +4,11 @@ All notable changes to JSPL are documented in this file.
 
 Versioning follows [Semantic Versioning](https://semver.org/): MAJOR for breaking changes, MINOR for backward-compatible features, and PATCH for backward-compatible fixes.
 
+## [2.0.1] - 2026-09-09
+
+### Fixed 
+- Made Blanket Booking Order in Purchase/Sales Order item optional.
+
 ## [2.0.0] - 2026-09-07
 
 ### Added
