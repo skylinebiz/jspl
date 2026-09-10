@@ -4,6 +4,30 @@ All notable changes to JSPL are documented in this file.
 
 Versioning follows [Semantic Versioning](https://semver.org/): MAJOR for breaking changes, MINOR for backward-compatible features, and PATCH for backward-compatible fixes.
 
+## [2.0.1] - 2026-09-09
+
+### Fixed 
+- Made Blanket Booking Order in Purchase/Sales Order item optional.
+
+## [2.0.0] - 2026-09-07
+
+### Added
+
+- Blanket Booking Order now has a **Status** field: Draft, To Order (Ordered Quantity is 0), Partially Ordered (Ordered Quantity less than Quantity), Completed (Ordered Quantity reaches Quantity), On Hold, Closed, Cancelled. It's computed automatically from Ordered Quantity on every save and whenever a linked Purchase/Sales Order is submitted or cancelled - except while manually On Hold or Closed, where it stays put until explicitly cleared.
+- Manual **Hold** (prompts for a reason, logged as a comment) / **Resume**, and **Close** / **Re-open** actions on a submitted Blanket Booking Order, mirroring Sales Order's own workflow. Only available to users with submit permission; unavailable once a Blanket Booking Order is Completed.
+- A Closed Blanket Booking Order can no longer be cancelled directly - it must be Re-opened first; cancelling any Blanket Booking Order now also sets its status to Cancelled.
+- On Hold / Closed Blanket Booking Orders are excluded from the Blanket Booking Order picker on Purchase/Sales Order items, and rejected server-side if one is referenced anyway.
+- The list view now shows a colored status indicator instead of the generic Draft/Submitted/Cancelled badge.
+
+### Changed
+
+- Blanket Booking Order Item's Rate (and Rate in Company Currency) is no longer mandatory. The Purchase/Sales Order item's rate is only overridden when a Rate is actually set on the matching Blanket Booking Order row; if it's left blank, the order's own rate is used as-is.
+- Renamed the Blanket Booking Order Item checkbox label from "Allow Overvaluation Purchase/Sales" to **"Allow Over Purchase/Sale"**, and added it to the list view.
+
+### Fixed
+
+- The client-side check that validates a row's Item Group against its Blanket Booking Order (and prefills Rate) could momentarily read the *previous* item's Item Group right after changing Item Code, since Item Group is fetched asynchronously - causing a spurious "Item Group not listed" error and clearing the Blanket Booking Order selection. It now resolves the Item's group itself and re-checks the row hasn't changed again before acting on either lookup's result.
+
 ## [1.0.0] - 2026-09-03
 
 ### Added

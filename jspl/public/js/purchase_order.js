@@ -4,14 +4,16 @@
 frappe.ui.form.on("Purchase Order", {
 	setup: function (frm) {
 		// Blanket Booking Order picked against a Purchase Order Item must be
-		// submitted, Purchasing, for the same supplier as this order, and its
-		// validity (From Date - To Date) must cover this order's Transaction Date.
+		// submitted (and not On Hold/Closed), Purchasing, for the same supplier
+		// as this order, and its validity (From Date - To Date) must cover this
+		// order's Transaction Date.
 		frm.set_query("custom_blanket_booking_order", "items", function (doc) {
 			return {
 				filters: {
 					order_type: "Purchasing",
 					supplier: doc.supplier,
 					docstatus: 1,
+					status: ["not in", ["On Hold", "Closed"]],
 					from_date: ["<=", doc.transaction_date],
 					to_date: [">=", doc.transaction_date],
 				},

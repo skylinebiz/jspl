@@ -1,5 +1,19 @@
 # Release Notes
 
+## v2.0.1 — 2026-09-09
+
+Blanket Booking Order in Purchase/Sales Order Item is now optional.
+
+## v2.0.0 — 2026-09-07
+
+Blanket Booking Order now has a lifecycle of its own, matching Sales Order's Hold/Close workflow:
+
+- A **Status** field tracks it automatically as **Draft → To Order → Partially Ordered → Completed**, based on how much of its committed quantity has actually been ordered.
+- It can be manually put **On Hold** (with a reason) or **Closed**, and later **Resumed** or **Re-opened** - while held or closed, it's excluded from the picker on new Purchase/Sales Order items and status stops auto-updating until it's cleared. A Completed order can't be Held or Closed, and a Closed one can't be cancelled without reopening it first.
+- The list view shows this status as a proper colored indicator instead of the generic Draft/Submitted/Cancelled badge.
+
+Alongside that: a Blanket Booking Order Item's Rate is now optional (the order's rate is only overridden when one is actually set), its "Allow Over Purchase/Sale" checkbox is easier to spot in the grid, and a timing bug that could flash a false "Item Group not listed" error - and silently drop the Blanket Booking Order - right after switching an item is fixed.
+
 ## v1.0.0 — 2026-09-03
 
 Initial release of JSPL.
